@@ -45,6 +45,10 @@ create table if not exists public.records (
   primary key (business_id, coll, id)
 );
 create index if not exists records_changed_idx on public.records (business_id, updated_at);
+-- Document numbers are unique per business and document kind (see migrations/20261028_unique_doc_numbers.sql)
+create unique index if not exists records_doc_no_uniq
+  on public.records (business_id, (data->>'kind'), (data->>'no'))
+  where coll = 'docs' and not deleted and coalesce(data->>'no', '') <> '';
 
 alter table public.businesses enable row level security;
 alter table public.members    enable row level security;

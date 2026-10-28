@@ -129,7 +129,11 @@ const fl=()=>{const q=($('#q')||{value:''}).value.toLowerCase();document.querySe
 const bar=(chips)=>`<div class="row np"><input id=q placeholder="Search or filter" oninput="fl()">${(chips||[]).map(c=>`<button class=g onclick="F('${c}')">${c}</button>`).join('')}<button class=g onclick="F('')">All</button><span class=sp></span><button class=g onclick="exp()">Export CSV</button><button class=g onclick="print()">Print</button></div>`;
 const pill=s=>`<span class="p ${s.replace(/ /g,'')}">${s}</span>`,opt=(a,sel,f=x=>x[1])=>a.map(x=>`<option value="${esc(x[0])}" ${x[0]==sel?'selected':''}>${esc(f(x))}</option>`).join('');
 const accOpts=(sel,cats)=>opt(D.accts.filter(a=>a.on&&(!cats||cats.includes(a.cat))).map(a=>[a.code,a.name]),sel,x=>x[0]+' '+x[1]);
-function csv(t){const r=[];let row=[],f='',q=0;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'&&t[i+1]=='"'){f+='"';i++}else if(c=='"')q=0;else f+=c}else if(c=='"')q=1;else if(c==','||c==';'){row.push(f);f=''}else if(c=='\n'||c=='\r'){if(c=='\r'&&t[i+1]=='\n')i++;row.push(f);r.push(row);row=[];f=''}else f+=c}if(f||row.length){row.push(f);r.push(row)}return r.filter(x=>x.join('').trim())}
+function amtOf(v){let s=String(v??'').replace(/ZAR|R|\s|\u00a0/gi,'');const neg=/^\(.*\)$/.test(s)||/-$/.test(s)||/^-/.test(s);s=s.replace(/[()\-]/g,'');
+const c=s.lastIndexOf(','),d=s.lastIndexOf('.');if(c>-1&&d>-1)s=c>d?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');
+else if(c>-1){const p=s.split(',');s=p.length==2&&p[1].length<=2?p[0]+'.'+p[1]:s.replace(/,/g,'')}else if(d>-1&&s.split('.').length>2)s=s.replace(/\./g,'');
+return(neg?-1:1)*C(s)}
+function csv(t){const L=(t.split(/\r?\n/).find(l=>l.trim())||'').replace(/"[^"]*"/g,''),cnt=x=>L.split(x).length-1,sep=[',',';','\t'].reduce((a,b)=>cnt(b)>cnt(a)?b:a);const r=[];let row=[],f='',q=0;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'&&t[i+1]=='"'){f+='"';i++}else if(c=='"')q=0;else f+=c}else if(c=='"')q=1;else if(c==sep){row.push(f);f=''}else if(c=='\n'||c=='\r'){if(c=='\r'&&t[i+1]=='\n')i++;row.push(f);r.push(row);row=[];f=''}else f+=c}if(f||row.length){row.push(f);r.push(row)}return r.filter(x=>x.join('').trim())}
 const pd=s=>{s=s.trim();let m=s.match(/^(\d{4})[-\/](\d\d)[-\/](\d\d)/);if(m)return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/^(\d\d?)[-\/](\d\d?)[-\/](\d{4})/);return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):today()};
 function pick(fn){const i=document.createElement('input');i.type='file';i.accept='.csv,.txt,.json';i.onchange=()=>{const r=new FileReader();r.onload=()=>{try{fn(r.result)}catch(e){err(e.message)}};r.readAsText(i.files[0])};i.click()}
 /* ---------- contacts ---------- */
@@ -155,7 +159,7 @@ function iform(id){const i=itm(id)||{vat:'S',track:1,price:0,buy:0,stock:0,re:0}
 function saveI(id){const g=x=>$('#'+x).value,n=g('in').trim();if(!n)return err('Enter a name.');const o=id?itm(id):{id:uid(),stock:0,cost:0};Object.assign(o,{desc:g('id2'),code:g('ic'),name:n,price:C(g('ip')),buy:C(g('ib')),vat:g('iv'),re:+g('ir')||0,track:+g('it')});if(!id){o.cost=o.buy;D.items.push(o);const q=+g('io')||0;if(q>0&&o.track)try{post('opening',today(),'OPEN','Opening stock '+n,[{a:'1200',dr:Math.round(q*o.cost),cr:0},{a:'3000',dr:0,cr:Math.round(q*o.cost)}]);o.stock=q}catch(e){D.items.pop();return err(e.message)}}save();closeM();route()}
 function adj(id){const i=itm(id),q=parseFloat(prompt('Quantity change for '+i.name+' (use - to reduce)'));if(!q)return;const r=prompt('Reason');if(!r)return;const v=Math.round(Math.abs(q)*i.cost);try{post('adjustment',today(),'ADJ','Stock adjustment: '+r,q>0?[{a:'1200',dr:v,cr:0},{a:'5100',dr:0,cr:v}]:[{a:'5100',dr:v,cr:0},{a:'1200',dr:0,cr:v}])}catch(e){return err(e.message)}i.stock+=q;save();route()}
 V.items=()=>H(`<div class=row><h2>Items</h2><span class=sp></span><button class=g onclick="pick(impI)">Import CSV</button><button class=g onclick="bulk()">Bulk price change</button><button class=b onclick="iform()">New item</button></div><div class=card>${bar(['Low stock'])}${tbl(['Code','Item','Sales price','Cost','On hand','Stock value',''],D.items.map(i=>[esc(i.code),esc(i.name),R(i.price),R(i.cost),i.track?(i.stock+(i.stock<=i.re?' · Low stock':'')):'-',R(Math.round(i.stock*i.cost)),`<button class=g onclick="iform('${i.id}')">Edit</button><button class=g onclick="adj('${i.id}')">Adjust</button>`]))}</div>`);
-function impI(t){const r=csv(t),h=r[0].map(x=>x.toLowerCase().trim());let n=0;r.slice(1).forEach(x=>{const g=k=>x[h.indexOf(k)]||'';if(g('name')){D.items.push({id:uid(),code:g('code'),name:g('name'),price:C(g('price')),buy:C(g('cost')),cost:C(g('cost')),vat:g('vat')||'S',track:0,stock:0,re:0});n++}});save();alert(n+' items imported (columns: code, name, price, cost, vat). Edit an item to turn on stock tracking.');route()}
+function impI(t){const r=csv(t),h=r[0].map(x=>x.toLowerCase().trim());let n=0;r.slice(1).forEach(x=>{const g=k=>x[h.indexOf(k)]||'';if(g('name')){D.items.push({id:uid(),code:g('code'),name:g('name'),price:amtOf(g('price')),buy:amtOf(g('cost')),cost:amtOf(g('cost')),vat:g('vat')||'S',track:0,stock:0,re:0});n++}});save();alert(n+' items imported (columns: code, name, price, cost, vat). Edit an item to turn on stock tracking.');route()}
 function bulk(){const p=parseFloat(prompt('Change all sales prices by what percent? (e.g. 5 or -3)'));if(!p)return;D.items.forEach(i=>i.price=Math.round(i.price*(1+p/100)));save();route()}
 /* ---------- documents ---------- */
 let ED;const blank=()=>({item:'',d:'',q:1,p:0,disc:0,vat:'S',acc:''});
@@ -204,7 +208,7 @@ let BK='1000';const bl=c=>D.jr.reduce((s,j)=>s+j.lines.filter(l=>l.a==c).reduce(
 function spend(b,date,amt,a,vat,memo){const g=Math.abs(amt),r=TR[vat]||0,t=Math.round(g*r/(1+r)),n=g-t;return post('bank',date,'',memo,amt>0?[{a:b,dr:g,cr:0},{a,dr:0,cr:n},{a:'2100',dr:0,cr:t}]:[{a,dr:n,cr:0},{a:'1300',dr:t,cr:0},{a:b,dr:0,cr:g}])}
 function mt(s,j){const l=j.lines.find(x=>x.a==s.bank&&!x.m&&x.dr-x.cr==s.amt);if(l){l.m=s.id;s.jid=j.id;s.st='m'}}
 function impB(t){const r=csv(t),h=r[0].map(x=>x.toLowerCase());const ix=k=>{const i=h.findIndex(x=>x.includes(k));return i}, di=Math.max(ix('date'),0),ni=ix('desc')>=0?ix('desc'):1,ai=ix('amount')>=0?ix('amount'):2;let n=0,dp=0;
-r.slice(1).forEach(x=>{const date=pd(x[di]),desc=(x[ni]||'').trim(),amt=C((x[ai]||'0').replace(/[R\s]/g,'').replace(',','.'));if(!amt)return;if(D.bank.some(s=>s.bank==BK&&s.date==date&&s.desc==desc&&s.amt==amt)){dp++;return}
+r.slice(1).forEach(x=>{const date=pd(x[di]),desc=(x[ni]||'').trim(),amt=amtOf(x[ai]);if(!amt)return;if(D.bank.some(s=>s.bank==BK&&s.date==date&&s.desc==desc&&s.amt==amt)){dp++;return}
 const s={id:uid(),bank:BK,date,desc,amt,st:'u'};D.bank.push(s);n++;const ru=D.rules.find(q=>desc.toLowerCase().includes(q.t.toLowerCase()));if(ru)try{mt(s,spend(BK,date,amt,ru.a,'N',desc))}catch(e){}});save();alert(n+' lines imported, '+dp+' duplicates skipped. (Columns: date, description, amount.)');route()}
 V.banking=()=>{const B=D.bank.filter(s=>s.bank==BK).sort((a,b)=>a.date.localeCompare(b.date)),cl=B.filter(s=>s.st!='u').reduce((t,s)=>t+s.amt,0),sb=$('#sbal')?.value;
 const cand=s=>{const o=[];D.jr.forEach(j=>j.lines.forEach(l=>{if(l.a==s.bank&&!l.m&&l.dr-l.cr==s.amt)o.push([j.id,fd(j.date)+' '+(j.memo||'')])}));return o};
@@ -330,7 +334,8 @@ const SBU='https://jhqlqcnvceuxtzgxxlel.supabase.co',SBK='eyJhbGciOiJIUzI1NiIsIn
 let sb,BID=null,SN={},RV={},SYM='',lastPull='',BIZN='',REC=0,syLoad=0,syBusy=0,syAgain=0,syConf=0,syT;
 const keyOf=(c,x)=>String(x.id??x.code??x._k??(x._k=uid()+uid())),tm=()=>new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 function applyRow(r){const k=r.coll+'/'+r.id;if(RV[k]===r.rev&&!r.deleted)return false;if(!IDOK.test(String(r.id))||(!r.deleted&&(r.coll=='biz'?!bizOk(r.data):!safeData(r.data)||r.coll=='accts'&&!IDOK.test(String(r.data.code))))){console.warn('Skipped unsafe record',r.coll,r.id);return false}
-if(r.coll=='biz'||r.coll=='seq'){if(SN[k]!==undefined&&JSON.stringify(D[r.coll])!==SN[k])syConf++;D[r.coll]=r.data;RV[k]=r.rev;SN[k]=JSON.stringify(r.data);return true}
+if(r.coll=='seq'){const m={...r.data};for(const q in D.seq)m[q]=Math.max(+m[q]||0,+D.seq[q]||0);D.seq=m;RV[k]=r.rev;SN[k]=JSON.stringify(r.data);return true}
+if(r.coll=='biz'){if(SN[k]!==undefined&&JSON.stringify(D[r.coll])!==SN[k])syConf++;D[r.coll]=r.data;RV[k]=r.rev;SN[k]=JSON.stringify(r.data);return true}
 const a=D[r.coll];if(!a)return false;const i=a.findIndex(x=>keyOf(r.coll,x)==r.id);
 if(r.deleted){if(i>=0)a.splice(i,1);delete SN[k];RV[k]=r.rev;return true}
 if(i>=0){if(SN[k]!==undefined&&JSON.stringify(a[i])!==SN[k])syConf++;a[i]=r.data}else a.push(r.data);RV[k]=r.rev;SN[k]=JSON.stringify(r.data);return true}
@@ -340,17 +345,21 @@ const {data,error}=await q.order('coll').order('id').range(from,from+999);if(err
 syLoad=1;try{data.forEach(r=>{if(applyRow(r))n++;if(r.updated_at>lastPull)lastPull=r.updated_at})}finally{syLoad=0}
 if(data.length<1000)break;from+=1000}
 if(n)D.audit.sort((a,b)=>a.t<b.t?1:-1);return n}
+let RENUM=[];
+function renumberDoc(id){const d=doc(id);if(!d||!d.no)return;const old=d.no;d.no='';nextNo(d);D.jr.forEach(j=>{if(j.doc==id){j.ref=d.no;j.memo=String(j.memo||'').split(old).join(d.no)}});log('Renumbered '+old+' to '+d.no+': number already used by another user');RENUM.push(old+' is now '+d.no)}
+const docClash=e=>e&&e.code=='23505'&&/records_doc_no_uniq/.test(e.message||'');
 async function sbPush(){const cur={},up=[],adm=CU.role=='admin';
 COLS.forEach(c=>D[c].forEach(x=>{cur[c+'/'+keyOf(c,x)]=[c,x]}));cur['biz/main']=['biz',D.biz];cur['seq/main']=['seq',D.seq];
 for(const k in cur){const [c,x]=cur[k],j=JSON.stringify(x);if(SN[k]!==j&&(RV[k]!=null||adm||(c!='biz'&&c!='seq')))up.push({k,c,id:k.slice(c.length+1),x,j})}
 const gone=Object.keys(SN).filter(k=>!cur[k]&&RV[k]!=null).map(k=>{const c=k.split('/')[0];return{k,c,id:k.slice(c.length+1)}});
 const ins=up.filter(u=>RV[u.k]==null),upd=up.filter(u=>RV[u.k]!=null);let bad=0,denied=0,dup=0;
 for(let i=0;i<ins.length;i+=100){const ch=ins.slice(i,i+100),{error}=await sb.from('records').insert(ch.map(u=>({business_id:BID,coll:u.c,id:u.id,data:u.x})));
-if(!error)ch.forEach(u=>{RV[u.k]=1;SN[u.k]=u.j});else if(error.code=='23505')dup=1;else if(error.code=='42501'||/row-level security/i.test(error.message)){denied+=ch.length;ch.forEach(u=>{if(D[u.c]&&Array.isArray(D[u.c])){const a=D[u.c],j=a.findIndex(y=>keyOf(u.c,y)==u.id);if(j>=0)a.splice(j,1)}})}else throw error}
+if(!error)ch.forEach(u=>{RV[u.k]=1;SN[u.k]=u.j});else if(docClash(error)){for(const u of ch){const r=await sb.from('records').insert({business_id:BID,coll:u.c,id:u.id,data:u.x});if(!r.error){RV[u.k]=1;SN[u.k]=u.j}else if(docClash(r.error)&&u.c=='docs')renumberDoc(u.id);else dup=1}}else if(error.code=='23505')dup=1;else if(error.code=='42501'||/row-level security/i.test(error.message)){denied+=ch.length;ch.forEach(u=>{if(D[u.c]&&Array.isArray(D[u.c])){const a=D[u.c],j=a.findIndex(y=>keyOf(u.c,y)==u.id);if(j>=0)a.splice(j,1)}})}else throw error}
 const one=async(u,del)=>{const {data,error}=await sb.from('records').update(del?{deleted:true,rev:RV[u.k]+1}:{data:u.x,rev:RV[u.k]+1}).eq('business_id',BID).eq('coll',u.c).eq('id',u.id).eq('rev',RV[u.k]).select('rev');
-if(error)throw error;if(data.length){RV[u.k]=data[0].rev;if(del)delete SN[u.k];else SN[u.k]=u.j}else bad++};
+if(error){if(docClash(error)&&u.c=='docs'){renumberDoc(u.id);return}throw error}if(data.length){RV[u.k]=data[0].rev;if(del)delete SN[u.k];else SN[u.k]=u.j}else bad++};
 const all=upd.map(u=>[u,0]).concat(gone.map(u=>[u,1]));for(let i=0;i<all.length;i+=20)await Promise.all(all.slice(i,i+20).map(([u,d])=>one(u,d)));
 if(bad||dup||denied){await sbPull(true);const m=(denied?'Some changes were not allowed for your account. ':'')+(bad?'Some changes could not be saved because someone else changed them or you do not have access. ':'');if(m)alert(m+'The latest version has been loaded.')}
+if(RENUM.length){const m=RENUM.join(', ');RENUM=[];try{localStorage[KEY]=JSON.stringify(D)}catch(e){}syAgain=1;alert('Another user used the same document number at the same time, so yours was renumbered: '+m+'.')}
 return up.length+gone.length}
 async function cloudSync(){if(syBusy||!BID||!CU)return;syBusy=1;try{const n=await sbPull();if(syConf){syConf=0;alert('Someone else changed a record while you were editing it. Their version was kept, so please check your recent changes.')}await sbPush();SYM='Synced '+tm();if(n&&!/^#\/(new|edit)/.test(location.hash))route()}catch(e){SYM=e.message||String(e)}finally{syBusy=0;if(syAgain){syAgain=0;cloudDirty()}else if(location.hash=='#/settings')route()}}
 function cloudDirty(){if(syLoad||!BID)return;if(syBusy){syAgain=1;return}clearTimeout(syT);syT=setTimeout(cloudSync,1500)}
