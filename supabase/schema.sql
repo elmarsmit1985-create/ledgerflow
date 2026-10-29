@@ -76,20 +76,23 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- Can the current user read (w=false) or write (w=true) a record of collection c?
+-- Payroll records (emps, pruns) need the 'payroll' area; see migrations/20261029_payroll_access.sql
 create or replace function public.can_rec(b uuid, c text, d jsonb, w boolean) returns boolean
 language plpgsql stable security definer set search_path = public as $$
 declare
-  s int; p int; ct int; it int; bk int; ac int; ds int; rp int;
+  s int; p int; ct int; it int; bk int; ac int; ds int; rp int; pr int;
 begin
   if not public.is_member(b) then return false; end if;
   if public.is_admin(b) then return true; end if;
+  pr := public.area_level(b,'payroll');
+  if c in ('emps','pruns') then return pr >= (case when w then 2 else 1 end); end if;
   if c = 'audit' then return w; end if;
   if c = 'biz' then return not w; end if;
   s := public.area_level(b,'sales');      p := public.area_level(b,'purchases');
   ct := public.area_level(b,'contacts');  it := public.area_level(b,'items');
   bk := public.area_level(b,'banking');   ac := public.area_level(b,'accounting');
   ds := public.area_level(b,'dash');      rp := public.area_level(b,'reports');
-  if greatest(s,p,ct,it,bk,ac,ds,rp) = 0 then return false; end if;
+  if greatest(s,p,ct,it,bk,ac,ds,rp,pr) = 0 then return false; end if;
   if not w then
     if greatest(ds,rp) >= 1 then return true; end if;
     return case c
@@ -110,7 +113,7 @@ begin
     when 'rules'    then bk >= 2
     when 'docs'     then (case when left(coalesce(d->>'kind',''),1)='s' then s else p end) >= 2
     when 'accts'    then ac >= 2
-    when 'jr'       then greatest(s,p,bk,ac) >= 2
+    when 'jr'       then greatest(s,p,bk,ac,pr) >= 2
     else greatest(s,p) >= 2
   end;
 end
