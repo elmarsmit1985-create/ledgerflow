@@ -1,4 +1,4 @@
--- LedgerFlow / LedgerX: Supabase database setup
+-- Tallivo (internal name ledgerflow): Supabase database setup
 -- Project: ledgerflow (jhqlqcnvceuxtzgxxlel), region eu-west-1
 -- Snapshot of the live database as of 2026-10-28, including the
 -- security hardening in migrations/20261028_security_hardening.sql.
