@@ -8,7 +8,7 @@ Kontivo accounting app. The repository, Supabase project and browser storage kee
 
 ## Trials and subscriptions
 
-Every new business gets a 14-day free trial (`businesses.trial_ends`). After that it stays open only while `businesses.paid_until` is in the future. When both have passed, the database blocks every record, user profile and invite for that business, and the app shows a locked screen and clears the copy of the books stored on the device. Nothing is deleted; it all opens again once the business is paid up.
+Every new business gets a one-month free trial (`businesses.trial_ends`). After that it stays open only while `businesses.paid_until` is in the future. When both have passed, the database blocks every record, user profile and invite for that business, and the app shows a locked screen and clears the copy of the books stored on the device. Nothing is deleted; it all opens again once the business is paid up.
 
 Run these in the Supabase SQL editor (customers cannot change these columns themselves):
 
