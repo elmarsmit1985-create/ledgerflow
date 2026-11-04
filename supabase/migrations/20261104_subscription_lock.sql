@@ -5,7 +5,10 @@
 
 alter table public.businesses
   add column if not exists trial_ends timestamptz not null default (now() + interval '14 days'),
-  add column if not exists paid_until timestamptz;
+  add column if not exists paid_until timestamptz,
+  add column if not exists always_on boolean not null default false;
+
+-- always_on: never locks (Kontivo's own business, ECS Africa). Set by Kontivo only.
 
 -- Existing businesses get a fresh 14-day trial from today so nobody is locked out by this change.
 update public.businesses set trial_ends = greatest(trial_ends, now() + interval '14 days');
@@ -17,7 +20,7 @@ grant update (name) on public.businesses to authenticated;
 -- Is the business inside its trial or a paid period?
 create or replace function public.biz_active(b uuid) returns boolean
 language sql stable security definer set search_path = public as $$
-  select coalesce((select now() < greatest(trial_ends, coalesce(paid_until, '-infinity'::timestamptz))
+  select coalesce((select always_on or now() < greatest(trial_ends, coalesce(paid_until, '-infinity'::timestamptz))
                    from public.businesses where id = b), false)
 $$;
 
@@ -26,7 +29,8 @@ create or replace function public.my_access()
 returns table (business_id uuid, name text, role text, trial_ends timestamptz, paid_until timestamptz, active boolean, status text)
 language sql stable security definer set search_path = public as $$
   select b.id, b.name, m.role, b.trial_ends, b.paid_until, public.biz_active(b.id),
-         case when b.paid_until is not null and now() < b.paid_until then 'paid'
+         case when b.always_on then 'always_on'
+              when b.paid_until is not null and now() < b.paid_until then 'paid'
               when now() < b.trial_ends then 'trial'
               when b.paid_until is not null then 'unpaid'
               else 'trial_over' end
