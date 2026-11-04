@@ -54,3 +54,17 @@ Status as of 4 Nov 2026: **paused**. Pick up from "Next steps" below.
    - Emails or notices for a failed payment and for an upcoming renewal.
 4. Test end to end in the PayFast sandbox before going live.
 5. Merge PR #12 if it isn't merged already.
+
+## Also to do later: trial reminder email
+
+**Idea:** 5 days before a business's free trial ends, email its admin(s) asking them to subscribe before the account locks.
+
+**Plan:**
+- A daily scheduled job in Supabase (pg_cron) finds businesses whose `trial_ends` is 5 days away, that are not paid and not `always_on`, and haven't been reminded yet.
+- An Edge Function sends the email through an email service.
+- Add a `trial_reminder_sent` timestamp to `businesses` so each business gets the email once.
+- The email links to the subscribe page once PayFast is connected. Until then it gives the renewal contact.
+
+**Still to decide: the email service.**
+- Recommended: Resend (free up to 3,000 emails a month), sending from Kontivo's own domain, e.g. kontivo.co.za, which still needs registering.
+- Alternative: Brevo, sending from info.ecsafrica@gmail.com. This is quicker to set up, but more likely to land in spam.
